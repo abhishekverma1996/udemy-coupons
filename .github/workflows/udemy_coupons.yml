@@ -38,5 +38,5 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add website/coupons.json
-          git commit -m "Update Udemy coupons JSON [skip ci]" || echo "No changes to commit"
+          git commit -m "Update Udemy coupons JSON - $(TZ='Asia/Kolkata' date '+%Y-%m-%d %H:%M:%S IST')[skip ci]" || echo "No changes to commit"
           git push
