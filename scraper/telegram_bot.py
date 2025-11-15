@@ -75,7 +75,6 @@ async def set_channel(message: types.Message):
 # Scheduled Sender
 # -------------------
 async def scheduled_sender():
-    await bot.wait_until_ready()
     while True:
         channel = load_channel()
         if not channel:
