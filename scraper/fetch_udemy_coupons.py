@@ -1,10 +1,11 @@
+import os
 import requests
 import json
-import os
 from time import sleep
 
-BASE_LIST_URL = "https://cdn.real.discount/api/featured-courses?page={}"
-BASE_DETAIL_URL = "https://cdn.real.discount/api/courses/slug/{}"
+# Load URLs from environment variables
+BASE_LIST_URL = os.getenv("BASE_LIST_URL")
+BASE_DETAIL_URL = os.getenv("BASE_DETAIL_URL")
 
 OUTPUT_FILE = "website/coupons.json"
 HEADERS = {
@@ -26,13 +27,13 @@ def fetch_course_details(slug):
 def main():
     all_courses = []
     
-    # Step 1: Get first page to know total pages
+    # Step 1: Get total pages
     first_page = fetch_page(1)
     total_pages = first_page.get("totalPages", 1)
     
     print(f"Total pages to fetch: {total_pages}")
     
-    # Step 2: Loop through all pages
+    # Step 2: Loop through each page
     for page in range(1, total_pages + 1):
         print(f"Fetching page {page}...")
         page_data = fetch_page(page)
@@ -42,9 +43,11 @@ def main():
             slug = course.get("slug")
             if not slug:
                 continue
+            
             try:
                 details = fetch_course_details(slug)
-                # Pick relevant fields for final JSON
+                
+                # Build final course object
                 course_info = {
                     "id": details.get("id"),
                     "name": details.get("name"),
@@ -69,15 +72,16 @@ def main():
                     "language": details.get("language"),
                     "courseid": details.get("courseid")
                 }
-                all_courses.append(course_info)
                 
-                # polite delay to avoid hammering API
+                all_courses.append(course_info)
                 sleep(0.5)
+
             except Exception as e:
                 print(f"Failed to fetch details for {slug}: {e}")
-    
-    # Step 3: Save final JSON
+
+    # Step 3: Save JSON
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+    
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(all_courses, f, ensure_ascii=False, indent=2)
     
