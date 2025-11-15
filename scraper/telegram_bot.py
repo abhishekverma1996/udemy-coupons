@@ -10,89 +10,90 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_FILE = "scraper/channel_id.txt"
 LAST_SENT_FILE = "scraper/last_sent.txt"
 COUPONS_FILE = "website/coupons.json"
+
+# -------------------
+# HELPER FUNCTIONS
 # -------------------
 
-# Load saved channel
 def load_channel():
     if not os.path.exists(CHANNEL_FILE):
         return None
-    return open(CHANNEL_FILE).read().strip()
+    return open(CHANNEL_FILE, "r", encoding="utf-8").read().strip()
 
-
-# Load last sent index safely
 def load_last_sent():
     if not os.path.exists(LAST_SENT_FILE):
         return 0
     try:
-        content = open(LAST_SENT_FILE).read().strip()
-        if not content:
-            return 0
-        return int(content)
+        content = open(LAST_SENT_FILE, "r", encoding="utf-8").read().strip()
+        return int(content) if content else 0
     except:
         return 0
 
-
-# Save last sent index
 def save_last_sent(i):
-    with open(LAST_SENT_FILE, "w") as f:
+    os.makedirs(os.path.dirname(LAST_SENT_FILE), exist_ok=True)
+    with open(LAST_SENT_FILE, "w", encoding="utf-8") as f:
         f.write(str(i))
 
-
-# Load JSON data
 def load_courses():
     if not os.path.exists(COUPONS_FILE):
         return []
-    return json.load(open(COUPONS_FILE, "r", encoding="utf-8"))
-
+    with open(COUPONS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 # -------------------
-# MAIN SENDING LOGIC
+# MAIN LOGIC
 # -------------------
+
 async def main():
+    if not BOT_TOKEN:
+        print("❌ BOT_TOKEN not set! Add it to GitHub Secrets.")
+        return
+
     channel = load_channel()
     if not channel:
         print("❌ Channel not set. Add a channel to channel_id.txt")
         return
 
-    last = load_last_sent()
+    last_sent = load_last_sent()
     courses = load_courses()
 
-    if last >= len(courses):
+    if last_sent >= len(courses):
         print("✔ No new courses to send.")
         return
 
-    course = courses[last]
-    bot = Bot(token=BOT_TOKEN)
+    course = courses[last_sent]
 
-    # Prepare message
+    try:
+        bot = Bot(token=BOT_TOKEN)
+    except Exception as e:
+        print(f"❌ Failed to create bot: {e}")
+        return
+
     text = f"📚 *{course.get('name', 'No Title')}*\n\n"
     text += f"{course.get('description', '')}\n\n"
     text += f"[Enroll Here]({course.get('url', '#' )})"
     image = course.get("image")
 
-    # Send to Telegram
     try:
         if image:
             await bot.send_photo(
-                chat_id=channel, 
-                photo=image, 
-                caption=text, 
+                chat_id=channel,
+                photo=image,
+                caption=text,
                 parse_mode="Markdown"
             )
         else:
             await bot.send_message(
-                chat_id=channel, 
-                text=text, 
+                chat_id=channel,
+                text=text,
                 parse_mode="Markdown"
             )
         print(f"✔ Sent: {course.get('name')}")
+        save_last_sent(last_sent + 1)
     except Exception as e:
         print(f"❌ Failed to send course: {e}")
-        return
-
-    # Update last sent index
-    save_last_sent(last + 1)
-
+    finally:
+        await bot.close()
 
 # -------------------
 # RUN
