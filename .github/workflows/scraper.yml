@@ -26,4 +26,4 @@ jobs:
       - name: Send Next Course
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        run: python scraper/send_once.py
+        run: python scraper/telegram_bot.py
