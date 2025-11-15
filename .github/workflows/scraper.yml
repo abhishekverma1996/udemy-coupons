@@ -2,19 +2,21 @@ name: Udemy Coupons Scraper & Telegram Poster
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # every 30 minutes
-  workflow_dispatch:
+    # Runs every 5 minutes (Telegram bot posts frequently)
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # manual trigger
 
 jobs:
   scrape_and_post:
     runs-on: ubuntu-latest
+    environment: pythonscraper  # Use the environment where secrets are stored
 
     steps:
-      # 1. Checkout repo
+      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2. Set up Python
+      # 2. Setup Python
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -27,11 +29,14 @@ jobs:
           pip install -r scraper/requirements.txt
           pip install aiogram requests
 
-      # 4. Run scraper
+      # 4. Run Udemy scraper
       - name: Run Udemy scraper
+        env:
+          BASE_LIST_URL: ${{ secrets.BASE_LIST_URL }}
+          BASE_DETAIL_URL: ${{ secrets.BASE_DETAIL_URL }}
         run: python scraper/fetch_udemy_coupons.py
 
-      # 5. Run Telegram bot once for sending new courses
+      # 5. Run Telegram bot to post updates
       - name: Run Telegram bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
