@@ -2,28 +2,39 @@ name: Telegram Poster from JSON
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
-  workflow_dispatch:
-
-concurrency:
-  group: telegram-job
-  cancel-in-progress: true
+    # Runs every 5 minutes
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Manual trigger
 
 jobs:
-  post:
+  post_to_telegram:
     runs-on: ubuntu-latest
+    environment: pythonscraper
+    concurrency:
+      group: telegram-bot
+      cancel-in-progress: true  # Cancel previous instance if still running
 
     steps:
-      - uses: actions/checkout@v3
+      # 1. Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - uses: actions/setup-python@v4
+      # 2. Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - run: |
-          pip install aiogram requests
+      # 3. Load secrets into environment variables
+      - name: Load Telegram Bot Token
+        run: echo "BOT_TOKEN=${{ secrets.BOT_TOKEN }}" >> $GITHUB_ENV
 
-      - name: Send Next Course
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      # 4. Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install aiogram==2.25.1 requests
+
+      # 5. Run Telegram bot
+      - name: Run Telegram bot
         run: python scraper/telegram_bot.py
