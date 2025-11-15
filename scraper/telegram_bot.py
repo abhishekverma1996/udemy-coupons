@@ -1,7 +1,7 @@
 import os
 import json
-import re
 import asyncio
+import re
 from html import unescape
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -20,123 +20,158 @@ COUPONS_FILE = "website/coupons.json"
 MAX_CAPTION = 1024  # Telegram caption limit
 # -------------------
 
+
+# Load saved channel
 def load_channel():
     if not os.path.exists(CHANNEL_FILE):
         return None
-    return open(CHANNEL_FILE).read().strip()
+    with open(CHANNEL_FILE, "r", encoding="utf-8") as f:
+        return f.read().strip()
 
+
+# Load last sent index safely
 def load_last_sent():
     if not os.path.exists(LAST_SENT_FILE):
         return 0
     try:
-        content = open(LAST_SENT_FILE).read().strip()
+        with open(LAST_SENT_FILE, "r", encoding="utf-8") as f:
+            content = f.read().strip()
         if not content:
             return 0
         return int(content)
-    except:
+    except Exception:
         return 0
 
-def save_last_sent(i):
+
+# Save last sent index
+def save_last_sent(i: int):
     os.makedirs(os.path.dirname(LAST_SENT_FILE), exist_ok=True)
-    with open(LAST_SENT_FILE, "w") as f:
+    with open(LAST_SENT_FILE, "w", encoding="utf-8") as f:
         f.write(str(i))
 
+
+# Load JSON data
 def load_courses():
     if not os.path.exists(COUPONS_FILE):
         return []
-    return json.load(open(COUPONS_FILE, "r", encoding="utf-8"))
+    with open(COUPONS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 # -------------------
-# Clean HTML → Short text
+# HELPERS
 # -------------------
 def html_to_short_text(html: str, limit: int = 200) -> str:
+    """Udemy wali HTML description ko plain short text me convert kare."""
     if not html:
         return ""
+    # HTML tags remove
     text = re.sub(r"<[^>]+>", " ", html)
+    # HTML entities decode
     text = unescape(text)
+    # extra spaces
     text = re.sub(r"\s+", " ", text).strip()
     if len(text) > limit:
-        text = text[:limit - 3] + "..."
+        text = text[: limit - 3] + "..."
     return text
 
 
+def format_price(p):
+    """Price ko $xx.xx format me convert kare."""
+    try:
+        return f"${float(p):.2f}"
+    except Exception:
+        return str(p)
+
+
 # -------------------
-# CAPTION UI BUILDER
+# CAPTION BUILDER (UI)
 # -------------------
 def build_caption(course: dict) -> str:
     name = course.get("name", "No Title")
-    url = course.get("url", "#")
 
+    # typo handle: shoer_description
     short_desc = (
         course.get("shoer_description")
         or course.get("short_description")
         or ""
     )
+
     if not short_desc:
         short_desc = html_to_short_text(course.get("description", ""))
 
-    category = course.get("category")
-    subcategory = course.get("subcategory")
+    url = course.get("url", "#")
+
+    category = course.get("category")         # e.g. "IT & Software"
+    subcategory = course.get("subcategory")   # e.g. "IT Certifications"
     language = course.get("language", "English")
+    instructor = course.get("instructor")     # agar ho to use kar lenge
     store = course.get("store", "Udemy")
-    price = course.get("price")
-    sale_price = course.get("sale_price")
-    lectures = course.get("lectures")
-    views = course.get("views")
-    rating = course.get("rating")
+
+    price = course.get("price")              # original price
+    sale_price = course.get("sale_price")    # free ho to 0 / 0.0
 
     lines = []
-    lines.append("🆓 *FREE COURSE ALERT* 🆓")
-    lines.append("")
-    lines.append(f"🎓 *{name}*")
 
+    # Header – FREE COURSE ALERT
+    lines.append("🆓🆓🆓 <b>FREE COURSE ALERT</b> 🆓🆓🆓")
+    lines.append("")
+
+    # Title
+    lines.append(f"📝 <b>{name}</b>")
+    lines.append("")
+
+    # Short description
     if short_desc:
-        lines.append(f"_{short_desc}_")
+        lines.append(f"ℹ️ {short_desc}")
 
-    lines.append("")
+    # Instructor
+    if instructor:
+        lines.append(f"🧑‍🏫 <b>Instructor:</b> {instructor}")
 
+    # Language
+    if language:
+        lines.append(f"🌐 <b>Language:</b> {language}")
+
+    # Category / subcategory
     if category or subcategory:
-        cat_line = "🏷 *Category:* "
-        if category:
-            cat_line += f"#{str(category).replace(' ', '')}"
-        if subcategory:
-            cat_line += f" | {subcategory}"
-        lines.append(cat_line)
+        cat_tag = f"#{str(category).replace(' ', '')}" if category else ""
+        extra = f" | {subcategory}" if subcategory else ""
+        lines.append(f"📌 <b>Category:</b> {cat_tag}{extra}")
 
-    lines.append(f"🌐 *Language:* {language}")
-    lines.append(f"🏫 *Platform:* {store}")
+    # Platform
+    if store:
+        lines.append(f"🏫 <b>Platform:</b> {store}")
 
-    meta_bits = []
-    if lectures:
-        meta_bits.append(f"📚 {lectures} lectures")
-    if views:
-        meta_bits.append(f"👀 {views} enrolled")
-    if rating and float(rating) > 0:
-        meta_bits.append(f"⭐ {rating}/5 rating")
-
-    if meta_bits:
-        lines.append(" | ".join(meta_bits))
-
-    # PRICE BLOCK
+    # Price line – original kata hua
     if sale_price == 0 or sale_price == 0.0:
-        if price:
-            lines.append(f"💰 *Price:* {price} → *Free* 🔥")
+        # original price -> free
+        if price is not None:
+            orig = format_price(price)
+            lines.append(f"💰 <b>Price:</b> <s>{orig}</s> ➡️🆓")
         else:
-            lines.append("💰 *Price:* Free 🔥")
+            lines.append("💰 <b>Price:</b> 🆓")
     else:
-        lines.append(f"💰 *Price:* {price} → {sale_price}")
+        # normal discount case (agar kabhi use karo)
+        if price is not None and sale_price is not None:
+            orig = format_price(price)
+            newp = format_price(sale_price)
+            lines.append(f"💰 <b>Price:</b> <s>{orig}</s> ➡️ {newp}")
+        elif price is not None:
+            orig = format_price(price)
+            lines.append(f"💰 <b>Price:</b> {orig}")
 
-    lines.append("")
-    lines.append("⏰ *ENROLL NOW – LIMITED ENROLLMENTS ONLY*")
-    lines.append(f"[🔗 Enroll Here]({url})")
+    lines.append("🏃 <b>ENROLL NOW - LIMITED ENROLLMENTS ONLY</b>")
+    lines.append("━━━━━━━━━━━━━━━")
+    lines.append(f"🔗 <a href=\"{url}\">Enroll Now</a>")
 
-    output = "\n".join(lines)
+    text = "\n".join(lines)
 
-    if len(output) > MAX_CAPTION:
-        output = output[:MAX_CAPTION - 3] + "..."
+    # Caption limit
+    if len(text) > MAX_CAPTION:
+        text = text[: MAX_CAPTION - 3] + "..."
 
-    return output
+    return text
 
 
 # -------------------
@@ -162,36 +197,38 @@ async def main():
     image = course.get("image")
     url = course.get("url", "#")
 
+    # Enroll Now button
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🎓 Enroll Now", url=url)]
         ]
     )
 
+    # Send to Telegram
     try:
         if image:
             await bot.send_photo(
                 chat_id=channel,
                 photo=image,
                 caption=text,
-                parse_mode="Markdown",
-                reply_markup=keyboard
+                parse_mode="HTML",
+                reply_markup=keyboard,
             )
         else:
             await bot.send_message(
                 chat_id=channel,
                 text=text,
-                parse_mode="Markdown",
-                reply_markup=keyboard
+                parse_mode="HTML",
+                reply_markup=keyboard,
             )
 
         print(f"✔ Sent: {course.get('name')}")
-        save_last_sent(last + 1)
+        save_last_sent(last + 1)  # Only increment if successfully sent
 
     except Exception as e:
         print(f"❌ Failed to send course: {e}")
     finally:
-        await bot.close()
+        await bot.close()  # Safe close
 
 
 # -------------------
