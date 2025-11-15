@@ -41,7 +41,7 @@ def load_last_sent():
     with open(LAST_SENT_FILE, "r") as f:
         return int(f.read().strip())
 
-# Load courses
+# Load courses from JSON
 def load_courses():
     if not os.path.exists(COUPONS_FILE):
         return []
