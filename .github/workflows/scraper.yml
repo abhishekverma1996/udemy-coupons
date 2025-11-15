@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install aiogram requests
+          pip install aiogram==2.25.1 requests
 
       # 4. Run Telegram bot to post updates from JSON
       - name: Run Telegram bot
