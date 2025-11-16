@@ -29,28 +29,22 @@ def load_channel():
         return f.read().strip()
 
 
-# Load last sent index safely
-def load_last_sent():
+# 🔥 Load last sent COURSE URL
+def load_last_url():
     if not os.path.exists(LAST_SENT_FILE):
-        return 0
-    try:
-        with open(LAST_SENT_FILE, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-        if not content:
-            return 0
-        return int(content)
-    except Exception:
-        return 0
+        return None
+    with open(LAST_SENT_FILE, "r", encoding="utf-8") as f:
+        return f.read().strip() or None
 
 
-# Save last sent index
-def save_last_sent(i: int):
+# 🔥 Save last sent course URL
+def save_last_url(url: str):
     os.makedirs(os.path.dirname(LAST_SENT_FILE), exist_ok=True)
     with open(LAST_SENT_FILE, "w", encoding="utf-8") as f:
-        f.write(str(i))
+        f.write(url)
 
 
-# Load JSON data
+# Load JSON courses
 def load_courses():
     if not os.path.exists(COUPONS_FILE):
         return []
@@ -62,116 +56,78 @@ def load_courses():
 # HELPERS
 # -------------------
 def html_to_short_text(html: str, limit: int = 200) -> str:
-    """Udemy wali HTML description ko plain short text me convert kare."""
     if not html:
         return ""
-    # HTML tags remove
     text = re.sub(r"<[^>]+>", " ", html)
-    # HTML entities decode
     text = unescape(text)
-    # extra spaces
     text = re.sub(r"\s+", " ", text).strip()
-    if len(text) > limit:
-        text = text[: limit - 3] + "..."
-    return text
+    return text[: limit - 3] + "..." if len(text) > limit else text
 
 
 def format_price(p):
-    """Price ko $xx.xx format me convert kare."""
     try:
         return f"${float(p):.2f}"
-    except Exception:
+    except:
         return str(p)
 
 
 # -------------------
-# CAPTION BUILDER (UI)
+# CAPTION BUILDER
 # -------------------
 def build_caption(course: dict) -> str:
     name = course.get("name", "No Title")
-
-    # typo handle: shoer_description
     short_desc = (
         course.get("shoer_description")
         or course.get("short_description")
-        or ""
+        or html_to_short_text(course.get("description", ""))
     )
-
-    if not short_desc:
-        short_desc = html_to_short_text(course.get("description", ""))
-
     url = course.get("url", "#")
-
-    category = course.get("category")         # e.g. "IT & Software"
-    subcategory = course.get("subcategory")   # e.g. "IT Certifications"
+    category = course.get("category")
+    subcategory = course.get("subcategory")
     language = course.get("language", "English")
-    instructor = course.get("instructor")     # agar ho to use kar lenge
+    instructor = course.get("instructor")
     store = course.get("store", "Udemy")
 
-    price = course.get("price")              # original price
-    sale_price = course.get("sale_price")    # free ho to 0 / 0.0
+    price = course.get("price")
+    sale = course.get("sale_price")
 
     lines = []
-
-    # Header – FREE COURSE ALERT
     lines.append("🆓🆓🆓 <b>FREE COURSE ALERT</b> 🆓🆓🆓")
     lines.append("")
-
-    # Title
     lines.append(f"📝 <b>{name}</b>")
     lines.append("")
 
-    # Short description
     if short_desc:
         lines.append(f"ℹ️ {short_desc}")
 
-    # Instructor
     if instructor:
         lines.append(f"🧑‍🏫 <b>Instructor:</b> {instructor}")
 
-    # Language
     if language:
         lines.append(f"🌐 <b>Language:</b> {language}")
 
-    # Category / subcategory
     if category or subcategory:
-        cat_tag = f"#{str(category).replace(' ', '')}" if category else ""
+        cat_tag = f"#{category.replace(' ', '')}" if category else ""
         extra = f" | {subcategory}" if subcategory else ""
         lines.append(f"📌 <b>Category:</b> {cat_tag}{extra}")
 
-    # Platform
     if store:
         lines.append(f"🏫 <b>Platform:</b> {store}")
 
-    # Price line – original kata hua
-    if sale_price == 0 or sale_price == 0.0:
-        # original price -> free
-        if price is not None:
-            orig = format_price(price)
-            lines.append(f"💰 <b>Price:</b> <s>{orig}</s> ➡️🆓")
+    if sale == 0 or sale == 0.0:
+        if price:
+            lines.append(f"💰 <b>Price:</b> <s>{format_price(price)}</s> ➡️🆓")
         else:
             lines.append("💰 <b>Price:</b> 🆓")
     else:
-        # normal discount case (agar kabhi use karo)
-        if price is not None and sale_price is not None:
-            orig = format_price(price)
-            newp = format_price(sale_price)
-            lines.append(f"💰 <b>Price:</b> <s>{orig}</s> ➡️ {newp}")
-        elif price is not None:
-            orig = format_price(price)
-            lines.append(f"💰 <b>Price:</b> {orig}")
+        lines.append(f"💰 <b>Price:</b> {format_price(price)}")
 
     lines.append("🏃 <b>ENROLL NOW - LIMITED ENROLLMENTS ONLY</b>")
     lines.append("━━━━━━━━━━━━━━━")
     lines.append(f"🔗 <a href=\"{url}\">Enroll Now</a>")
 
-    text = "\n".join(lines)
-
-    # Caption limit
-    if len(text) > MAX_CAPTION:
-        text = text[: MAX_CAPTION - 3] + "..."
-
-    return text
+    caption = "\n".join(lines)
+    return caption[: MAX_CAPTION - 3] + "..." if len(caption) > MAX_CAPTION else caption
 
 
 # -------------------
@@ -180,55 +136,57 @@ def build_caption(course: dict) -> str:
 async def main():
     channel = load_channel()
     if not channel:
-        print("❌ Channel not set. Add a channel to channel_id.txt")
+        print("❌ Channel not set in channel_id.txt")
         return
 
-    last = load_last_sent()
     courses = load_courses()
-
-    if last >= len(courses):
-        print("✔ No new courses to send.")
+    if not courses:
+        print("❌ No courses found")
         return
 
-    course = courses[last]
+    last_url = load_last_url()
+    current = courses[0]        # Always send *first* course from JSON
+    current_url = current.get("url")
+
+    # 🔥 Duplicate check — Only logic needed
+    if last_url == current_url:
+        print("✔ Already posted this course — skipping...")
+        return
+
     bot = Bot(token=BOT_TOKEN)
+    caption = build_caption(current)
+    image = current.get("image")
+    url = current.get("url")
 
-    text = build_caption(course)
-    image = course.get("image")
-    url = course.get("url", "#")
-
-    # Enroll Now button
     keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="🎓 Enroll Now", url=url)]
-        ]
+        inline_keyboard=[[InlineKeyboardButton(text="🎓 Enroll Now", url=url)]]
     )
 
-    # Send to Telegram
     try:
         if image:
             await bot.send_photo(
                 chat_id=channel,
                 photo=image,
-                caption=text,
+                caption=caption,
                 parse_mode="HTML",
                 reply_markup=keyboard,
             )
         else:
             await bot.send_message(
                 chat_id=channel,
-                text=text,
+                text=caption,
                 parse_mode="HTML",
                 reply_markup=keyboard,
             )
 
-        print(f"✔ Sent: {course.get('name')}")
-        save_last_sent(last + 1)  # Only increment if successfully sent
+        print(f"✔ Sent: {current.get('name')}")
+        save_last_url(current_url)
 
     except Exception as e:
-        print(f"❌ Failed to send course: {e}")
+        print("❌ Error sending:", e)
+
     finally:
-        await bot.close()  # Safe close
+        await bot.close()
 
 
 # -------------------
